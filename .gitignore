@@ -12,6 +12,10 @@ Secret.h
 # Visual Studio Code files
 .vscode/
 
+.idea/
+
+vcpkg/
+
 #ignore build directories
 out/
 
