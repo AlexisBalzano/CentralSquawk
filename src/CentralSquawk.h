@@ -50,7 +50,7 @@ namespace centralSquawk {
 	class CentralSquawk : public EuroScopePlugIn::CPlugIn
 	{
 		static constexpr int PERIODIC_FETCH_TIME_INTERVAL = 5; // seconds
-		static constexpr const char* API_URL = "centralsquawk.vatsim.fr";
+		static constexpr const char* API_URL = "pintade.vatsim.fr";
 		static constexpr int API_PORT = 443;
 
 	public:

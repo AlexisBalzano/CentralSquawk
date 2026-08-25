@@ -15,7 +15,6 @@
 #include "core/Helpers.h"
 #include "core/CompileCommands.h"
 #include "core/TagFunctions.h"
-#include "core/DevEndpoint.h" // TEMPORARY, delete before first release
 #include "Secret.h"
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
@@ -107,17 +106,7 @@ void CentralSquawk::QueueMessage(const std::string& message)
 }
 
 void CentralSquawk::WorkerThread() {
-	std::string baseUrl = std::string("https://") + API_URL + ":" + std::to_string(API_PORT);
-
-	// --- TEMPORARY DEV ENDPOINT OVERRIDE ------------------------------------
-	// Delete this block before the first release. See src/core/DevEndpoint.h
-	// for the full removal checklist. A release build compiles the call below
-	// to an empty string, so this is already inert without -DDEV=1.
-	if (const std::string overrideUrl = dev::EndpointOverride(); !overrideUrl.empty()) {
-		baseUrl = overrideUrl;
-		QueueMessage("DEV BUILD: using API endpoint " + baseUrl);
-	}
-	// --- END TEMPORARY DEV ENDPOINT OVERRIDE --------------------------------
+	std::string baseUrl = std::string("https://") + API_URL + "/squawk/";
 
 	// One client for every call. The scheme in the URL decides whether TLS is
 	// used, so http:// and https:// endpoints are both reachable.
