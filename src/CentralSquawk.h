@@ -61,7 +61,6 @@ namespace centralSquawk {
 		static constexpr int DUPE_ANNOTATION_SLOT = 8;
 		static constexpr const char* DUPE_ANNOTATION = "DUPE";
 		static constexpr const char* API_URL = "pintade.vatsim.fr";
-		static constexpr int API_PORT = 443;
 
 	public:
 		CentralSquawk();

@@ -106,7 +106,7 @@ void CentralSquawk::QueueMessage(const std::string& message)
 }
 
 void CentralSquawk::WorkerThread() {
-	std::string baseUrl = std::string("https://") + API_URL + "/squawk/";
+	std::string baseUrl = std::string("https://") + API_URL;
 
 	// One client for every call. The scheme in the URL decides whether TLS is
 	// used, so http:// and https:// endpoints are both reachable.
@@ -154,7 +154,7 @@ void CentralSquawk::WorkerThread() {
 void CentralSquawk::FetchAssignedSSR(httplib::Client& cli)
 {
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Get("/api/squawks", headers);
+	auto res = cli.Get("/squawk/api/squawks", headers);
 
 	if (!res) {
 		if (printError) {
@@ -248,7 +248,7 @@ void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& u
 	}
 
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Post("/api/assign", headers, body.dump(), "application/json");
+	auto res = cli.Post("/squawk/api/assign", headers, body.dump(), "application/json");
 
 	if (!res) {
 		QueueError("Assignment request for " + callsign + " failed: " + httplib::to_string(res.error()));
