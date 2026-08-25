@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Only referenced through a reference in declarations below, so the full
@@ -50,6 +51,15 @@ namespace centralSquawk {
 	class CentralSquawk : public EuroScopePlugIn::CPlugIn
 	{
 		static constexpr int PERIODIC_FETCH_TIME_INTERVAL = 5; // seconds
+
+		// Flight strip annotation used to publish the DUPE flag to other plugins;
+		// CoFrance reads it to raise its own notification.
+		//
+		// Slots 0-8 are a namespace shared with every plugin the vACC runs, and
+		// EuroScope syncs annotations between controllers. Slot 7 is TopSky's.
+		// Change this if 8 turns out to be taken.
+		static constexpr int DUPE_ANNOTATION_SLOT = 8;
+		static constexpr const char* DUPE_ANNOTATION = "DUPE";
 		static constexpr const char* API_URL = "pintade.vatsim.fr";
 		static constexpr int API_PORT = 443;
 
@@ -114,6 +124,12 @@ namespace centralSquawk {
 		// SSR data cache: callsign -> central assignment
 		std::mutex SSRCacheMutex_;
 		std::unordered_map<std::string, SsrInfo> SSRCache_;
+
+		/// Flights we have written a DUPE annotation for. Lets the flag be
+		/// cleared exactly once when the tag is released or transferred, rather
+		/// than every controller continuously clearing a slot they do not own.
+		/// Only touched from OnTimer, so it needs no lock.
+		std::unordered_set<std::string> dupeAnnotated_;
 
 		// Manual requests waiting to be sent by the worker thread.
 		std::mutex apiRequestQueueMutex_;

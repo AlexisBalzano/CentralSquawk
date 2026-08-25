@@ -316,30 +316,65 @@ void CentralSquawk::ApplyAssignments()
 		snapshot = SSRCache_;
 	}
 
+	std::unordered_set<std::string> seen;
+
 	for (auto fp = FlightPlanSelectFirst(); fp.IsValid(); fp = FlightPlanSelectNext(fp)) {
+		const char* callsignPtr = fp.GetCallsign();
+		if (callsignPtr == nullptr || *callsignPtr == '\0') continue;
+		const std::string callsign = ToUpper(callsignPtr);
+		seen.insert(callsign);
+
+		const char* tracker = fp.GetTrackingControllerCallsign();
+		const bool untracked = (tracker == nullptr || *tracker == '\0');
+		const bool mine = fp.GetTrackingControllerIsMe();
+
+		auto assigned = fp.GetControllerAssignedData();
+		const auto it = snapshot.find(callsign);
+
+		// --- DUPE annotation ------------------------------------------------
+		// EuroScope shares annotations between controllers, so the slot needs a
+		// single owner: only whoever holds the tag writes it. If every instance
+		// also cleared the slot for flights it does not track, two controllers
+		// would overwrite each other every second.
+		if (mine) {
+			const bool dupe = (it != snapshot.end() && it->second.dupe);
+			const std::string wantedFlag = dupe ? DUPE_ANNOTATION : "";
+			const char* currentFlag = assigned.GetFlightStripAnnotation(DUPE_ANNOTATION_SLOT);
+			if (currentFlag == nullptr || wantedFlag != currentFlag) {
+				assigned.SetFlightStripAnnotation(DUPE_ANNOTATION_SLOT, wantedFlag.c_str());
+			}
+			if (dupe) dupeAnnotated_.insert(callsign);
+			else dupeAnnotated_.erase(callsign);
+		}
+		else if (dupeAnnotated_.erase(callsign) > 0) {
+			// Released or transferred away. Clear our flag exactly once so the
+			// next controller does not inherit it, then leave the slot alone --
+			// from here it belongs to whoever holds the tag.
+			assigned.SetFlightStripAnnotation(DUPE_ANNOTATION_SLOT, "");
+		}
+
+		// --- squawk ---------------------------------------------------------
 		// Write for flights this controller tracks, and for flights nobody is
 		// tracking at all: an untracked flight has no owner, so setting the
 		// central code steps on nobody. A flight tracked by SOMEONE ELSE is
 		// theirs to set, even though the central assignment still stands.
-		const char* tracker = fp.GetTrackingControllerCallsign();
-		const bool untracked = (tracker == nullptr || *tracker == '\0');
-		if (!fp.GetTrackingControllerIsMe() && !untracked) continue;
-
-		const char* callsignPtr = fp.GetCallsign();
-		if (callsignPtr == nullptr || *callsignPtr == '\0') continue;
-
-		const auto it = snapshot.find(ToUpper(callsignPtr));
+		if (!mine && !untracked) continue;
 		if (it == snapshot.end()) continue;
 
 		const std::string& wanted = it->second.ssr;
 		if (!IsWellFormedSquawk(wanted)) continue;
 
-		auto assigned = fp.GetControllerAssignedData();
 		const char* current = assigned.GetSquawk();
 		if (current != nullptr && wanted == current) continue; // already correct
 
 		// The server is authoritative: a code set elsewhere is replaced.
 		assigned.SetSquawk(wanted.c_str());
+	}
+
+	// A flight that has left the flight plan list took its annotation with it,
+	// so drop the bookkeeping rather than letting it grow for the whole session.
+	if (dupeAnnotated_.size() > seen.size()) {
+		std::erase_if(dupeAnnotated_, [&seen](const std::string& cs) { return !seen.contains(cs); });
 	}
 }
 
@@ -370,8 +405,7 @@ void CentralSquawk::OnTimer(int Counter) {
 bool CentralSquawk::IsConnected()
 {
 	bool userIsConnected = this->GetConnectionType() == EuroScopePlugIn::CONNECTION_TYPE_DIRECT;
-	// return userIsConnected;
-	return true;
+	return userIsConnected;
 }
 
 bool CentralSquawk::IsController()
