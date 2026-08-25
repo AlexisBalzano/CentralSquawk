@@ -25,7 +25,7 @@ if(VCPKG_TARGET_TRIPLET MATCHES "-md$")
         "their own and need no overrides.")
 endif()
 
-project(CentralSquawk VERSION "0.0.1")
+project(CentralSquawk VERSION "1.0.0")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

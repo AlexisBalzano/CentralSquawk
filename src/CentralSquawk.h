@@ -25,11 +25,25 @@ namespace centralSquawk {
 		bool dupe = false;
 	};
 
+	// Values are part of the cross-plugin contract: CoFrance invokes these by
+	// number through StartTagFunction. Append only; never renumber.
 	enum TagActionID : int {
 		OpenMENU = 0,
-		AssignAuto,     // ask the server for a fresh code
-		AssignCode,     // force a code the controller types
-		AssignCurrent,  // force the code the aircraft is already squawking
+		AssignAuto,      // re-run the server's decision, Mode S included
+		AssignCode,      // force a code the controller types
+		AssignCurrent,   // force the code the aircraft is already squawking
+		AssignDiscrete,  // force a pool code, bypassing Mode S
+	};
+
+	/// A manual request waiting for the worker thread to send it.
+	struct AssignRequest {
+		enum class Kind {
+			Auto,      // server decides, and may hand back 1000
+			Discrete,  // pool code regardless of Mode S eligibility
+			SetCode,   // exactly `code`
+		};
+		Kind kind = Kind::Auto;
+		std::string code;  // only meaningful for SetCode
 	};
 
 
@@ -72,7 +86,7 @@ namespace centralSquawk {
 		void WorkerThread();
 		void FetchAssignedSSR(httplib::Client& cli);
 		void SendAssignRequest(httplib::Client& cli, const std::string& userCallsign,
-							   const std::string& callsign, const std::string& code);
+							   const std::string& callsign, const AssignRequest& request);
 		const std::string GenerateToken(const std::string& controllerCallsign);
 
 		/// Push central codes into EuroScope for flights this controller tracks.
@@ -102,8 +116,7 @@ namespace centralSquawk {
 		std::unordered_map<std::string, SsrInfo> SSRCache_;
 
 		// Manual requests waiting to be sent by the worker thread.
-		// Value is the code to force; an EMPTY value means "force a reassignment".
 		std::mutex apiRequestQueueMutex_;
-		std::unordered_map<std::string, std::string> pendingAssignRequests_;
+		std::unordered_map<std::string, AssignRequest> pendingAssignRequests_;
 	};
 } // namespace centralSquawk

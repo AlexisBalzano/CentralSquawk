@@ -139,7 +139,7 @@ void CentralSquawk::WorkerThread() {
 		// Manual requests first, so a controller's action is not delayed by up
 		// to a full fetch interval before it is sent.
 		if (isController_.load(std::memory_order_acquire)) {
-			std::unordered_map<std::string, std::string> pending;
+			std::unordered_map<std::string, AssignRequest> pending;
 			{
 				// Swap the queue out rather than holding the lock across the
 				// network calls: OnFunctionCall runs on the UI thread and must
@@ -147,8 +147,8 @@ void CentralSquawk::WorkerThread() {
 				std::lock_guard<std::mutex> lock(apiRequestQueueMutex_);
 				pending.swap(pendingAssignRequests_);
 			}
-			for (const auto& [callsign, code] : pending) {
-				SendAssignRequest(*cli, userCallsign, callsign, code);
+			for (const auto& [callsign, request] : pending) {
+				SendAssignRequest(*cli, userCallsign, callsign, request);
 			}
 		}
 
@@ -237,7 +237,7 @@ void CentralSquawk::FetchAssignedSSR(httplib::Client& cli)
 }
 
 void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& userCallsign,
-									  const std::string& callsign, const std::string& code)
+									  const std::string& callsign, const AssignRequest& request)
 {
 	if (userCallsign.empty()) {
 		QueueError("Not connected as a controller, cannot request an assignment.");
@@ -249,8 +249,14 @@ void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& u
 		{"controller", userCallsign},
 		{"token", GenerateToken(userCallsign)},
 	};
-	// An absent "code" means "force a reassignment"; present means "set this".
-	if (!code.empty()) body["code"] = code;
+	// "code" wins over "mode": present means "set exactly this". Otherwise the
+	// mode decides whether the server may hand back conspicuity ("auto") or
+	// must draw a discrete code ("discrete").
+	switch (request.kind) {
+	case AssignRequest::Kind::SetCode:  body["code"] = request.code; break;
+	case AssignRequest::Kind::Discrete: body["mode"] = "discrete";   break;
+	case AssignRequest::Kind::Auto:     body["mode"] = "auto";       break;
+	}
 
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
 	auto res = cli.Post("/api/assign", headers, body.dump(), "application/json");
@@ -322,9 +328,13 @@ void CentralSquawk::ApplyAssignments()
 	}
 
 	for (auto fp = FlightPlanSelectFirst(); fp.IsValid(); fp = FlightPlanSelectNext(fp)) {
-		// Write only for flights this controller tracks. Anything else is
-		// somebody else's to set, even though the central assignment stands.
-		if (!fp.GetTrackingControllerIsMe()) continue;
+		// Write for flights this controller tracks, and for flights nobody is
+		// tracking at all: an untracked flight has no owner, so setting the
+		// central code steps on nobody. A flight tracked by SOMEONE ELSE is
+		// theirs to set, even though the central assignment still stands.
+		const char* tracker = fp.GetTrackingControllerCallsign();
+		const bool untracked = (tracker == nullptr || *tracker == '\0');
+		if (!fp.GetTrackingControllerIsMe() && !untracked) continue;
 
 		const char* callsignPtr = fp.GetCallsign();
 		if (callsignPtr == nullptr || *callsignPtr == '\0') continue;

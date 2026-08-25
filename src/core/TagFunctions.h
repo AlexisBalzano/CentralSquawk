@@ -36,11 +36,10 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 	if (callsignPtr == nullptr || *callsignPtr == '\0') return;
 	const std::string callsign = ToUpper(callsignPtr);
 
-	// Hand a request to the worker thread. An EMPTY code means "force a
-	// reassignment"; anything else is a specific code to set.
-	const auto queueRequest = [&](const std::string& code) {
+	// Hand a request to the worker thread.
+	const auto queueRequest = [&](AssignRequest::Kind kind, const std::string& code = {}) {
 		std::lock_guard<std::mutex> lock(apiRequestQueueMutex_);
-		pendingAssignRequests_[callsign] = code;
+		pendingAssignRequests_[callsign] = AssignRequest{ kind, code };
 	};
 
 	switch (static_cast<TagActionID>(functionId)) {
@@ -48,6 +47,7 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 	{
 		OpenPopupList(area, "Squawk", 1);
 		AddPopupListElement("AUTO", NULL, static_cast<int>(TagActionID::AssignAuto), false, 2, false, false);
+		AddPopupListElement("DISCRETE", NULL, static_cast<int>(TagActionID::AssignDiscrete), false, 2, false, false);
 		AddPopupListElement("CURRENT", NULL, static_cast<int>(TagActionID::AssignCurrent), false, 2, false, false);
 		AddPopupListElement(SET_CODE_LABEL, NULL, static_cast<int>(TagActionID::AssignCode), false, 2, false, true);
 		break;
@@ -55,8 +55,17 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 
 	case TagActionID::AssignAuto:
 	{
-		queueRequest("");
+		queueRequest(AssignRequest::Kind::Auto);
 		DisplayMessage("Requested automatic squawk assignment for " + callsign);
+		break;
+	}
+
+	case TagActionID::AssignDiscrete:
+	{
+		// AUTO hands 1000 back to a flight that still qualifies, so this is the
+		// only way off conspicuity without typing a code by hand.
+		queueRequest(AssignRequest::Kind::Discrete);
+		DisplayMessage("Requested a discrete squawk for " + callsign);
 		break;
 	}
 
@@ -74,7 +83,7 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 			DisplayError(callsign + " is not squawking a usable code (" + current + ").");
 			return;
 		}
-		queueRequest(current);
+		queueRequest(AssignRequest::Kind::SetCode, current);
 		DisplayMessage("Requested squawk assignment for " + callsign + " to match its current code " + current);
 		break;
 	}
@@ -93,7 +102,7 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 			QueueError("\"" + code + "\" is not a squawk code (four digits, 0-7).");
 			return;
 		}
-		queueRequest(code);
+		queueRequest(AssignRequest::Kind::SetCode, code);
 		DisplayMessage("Requested squawk assignment for " + callsign + " to " + code);
 		break;
 	}
