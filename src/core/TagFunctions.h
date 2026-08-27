@@ -17,6 +17,7 @@ inline void CentralSquawk::RegisterTagActions()
 	// No tag ITEM of our own yet: bind this to an existing tag item (EuroScope's
 	// squawk field is the natural one) from the tag settings dialog.
 	RegisterTagItemFunction("Central Squawk menu", static_cast<int>(TagActionID::OpenMENU));
+	RegisterTagItemFunction("Assign Auto", static_cast<int>(TagActionID::AssignAuto));
 }
 
 inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString, POINT pt, RECT area)
@@ -56,7 +57,6 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 	case TagActionID::AssignAuto:
 	{
 		queueRequest(AssignRequest::Kind::Auto);
-		DisplayMessage("Requested automatic squawk assignment for " + callsign);
 		break;
 	}
 
@@ -65,7 +65,6 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 		// AUTO hands 1000 back to a flight that still qualifies, so this is the
 		// only way off conspicuity without typing a code by hand.
 		queueRequest(AssignRequest::Kind::Discrete);
-		DisplayMessage("Requested a discrete squawk for " + callsign);
 		break;
 	}
 
@@ -84,7 +83,6 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 			return;
 		}
 		queueRequest(AssignRequest::Kind::SetCode, current);
-		DisplayMessage("Requested squawk assignment for " + callsign + " to match its current code " + current);
 		break;
 	}
 
@@ -103,7 +101,6 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 			return;
 		}
 		queueRequest(AssignRequest::Kind::SetCode, code);
-		DisplayMessage("Requested squawk assignment for " + callsign + " to " + code);
 		break;
 	}
 
