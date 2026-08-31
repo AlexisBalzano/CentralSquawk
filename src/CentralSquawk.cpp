@@ -28,7 +28,6 @@ CentralSquawk::CentralSquawk() : CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE, "C
 {
 	m_stop.store(false, std::memory_order_relaxed);
 	Initialize();
-	DisplayMessage("Central Squawk plugin loaded. Version: " + std::string(PLUGIN_VERSION));
 };
 
 CentralSquawk::~CentralSquawk()
