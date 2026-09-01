@@ -87,8 +87,13 @@ include_directories(
 
 
 # Source files
+#
+# BridgePublisher.cpp is a translation unit of its own on purpose: esbridge.h's
+# client shim declares a file-static api pointer, so every TU that includes it
+# gets a separate copy and only one of them would ever be attached.
 set(SOURCES
     src/CentralSquawk.cpp
+    src/core/BridgePublisher.cpp
 )
 
 # Headers carry the inline member definitions, so list them on the target: that is
@@ -96,6 +101,7 @@ set(SOURCES
 set(HEADERS
     src/CentralSquawk.h
     src/Secret.h
+    src/core/BridgePublisher.h
     src/core/CompileCommands.h
     src/core/DevEndpoint.h
     src/core/Helpers.h
@@ -136,6 +142,10 @@ target_include_directories(EuroScopePluginDLL INTERFACE
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/External/httplib
     ${CMAKE_SOURCE_DIR}/External/EuroScopeSDK/include
+)
+# Third-party and warned about at /W4 like our own code would be, so keep it SYSTEM.
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
+    ${CMAKE_SOURCE_DIR}/External/esbridge
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 

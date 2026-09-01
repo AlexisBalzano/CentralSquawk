@@ -311,9 +311,12 @@ void CentralSquawk::ApplyAssignments()
 		// Copy out: iterating EuroScope's flight plans while holding the lock
 		// would block the worker thread for the whole sweep.
 		std::lock_guard<std::mutex> lock(SSRCacheMutex_);
-		if (SSRCache_.empty()) return;
 		snapshot = SSRCache_;
 	}
+
+	// An empty snapshot still has to be swept while anything is flagged: the server
+	// having dropped every flight is exactly when a stale DUPE must be retracted.
+	if (snapshot.empty() && !bridge_.HasPublished()) return;
 
 	std::unordered_set<std::string> seen;
 
@@ -330,27 +333,13 @@ void CentralSquawk::ApplyAssignments()
 		auto assigned = fp.GetControllerAssignedData();
 		const auto it = snapshot.find(callsign);
 
-		// --- DUPE annotation ------------------------------------------------
-		// EuroScope shares annotations between controllers, so the slot needs a
-		// single owner: only whoever holds the tag writes it. If every instance
-		// also cleared the slot for flights it does not track, two controllers
-		// would overwrite each other every second.
-		if (mine) {
-			const bool dupe = (it != snapshot.end() && it->second.dupe);
-			const std::string wantedFlag = dupe ? DUPE_ANNOTATION : "";
-			const char* currentFlag = assigned.GetFlightStripAnnotation(DUPE_ANNOTATION_SLOT);
-			if (currentFlag == nullptr || wantedFlag != currentFlag) {
-				assigned.SetFlightStripAnnotation(DUPE_ANNOTATION_SLOT, wantedFlag.c_str());
-			}
-			if (dupe) dupeAnnotated_.insert(callsign);
-			else dupeAnnotated_.erase(callsign);
-		}
-		else if (dupeAnnotated_.erase(callsign) > 0) {
-			// Released or transferred away. Clear our flag exactly once so the
-			// next controller does not inherit it, then leave the slot alone --
-			// from here it belongs to whoever holds the tag.
-			assigned.SetFlightStripAnnotation(DUPE_ANNOTATION_SLOT, "");
-		}
+		// --- DUPE -----------------------------------------------------------
+		// Published for every flight in the snapshot, tracked or not. Bridge
+		// values are local to this EuroScope instance, so unlike the flight strip
+		// annotation this replaced there is no shared slot for two controllers to
+		// overwrite, and therefore no need to elect an owner: every instance
+		// derives the same flag from the same authoritative snapshot.
+		bridge_.PublishDupe(callsign, it != snapshot.end() && it->second.dupe);
 
 		// --- squawk ---------------------------------------------------------
 		// Write for flights this controller tracks, and for flights nobody is
@@ -370,11 +359,7 @@ void CentralSquawk::ApplyAssignments()
 		assigned.SetSquawk(wanted.c_str());
 	}
 
-	// A flight that has left the flight plan list took its annotation with it,
-	// so drop the bookkeeping rather than letting it grow for the whole session.
-	if (dupeAnnotated_.size() > seen.size()) {
-		std::erase_if(dupeAnnotated_, [&seen](const std::string& cs) { return !seen.contains(cs); });
-	}
+	bridge_.ForgetAbsent(seen);
 }
 
 void CentralSquawk::OnTimer(int Counter) {
@@ -395,6 +380,11 @@ void CentralSquawk::OnTimer(int Counter) {
 		}
 		messageQueue_.clear();
 	}
+
+	// Attach to the bridge and claim our provider id. Only worth doing once the
+	// user is actually controlling: complaining about a missing bridge to
+	// somebody sitting disconnected in the observer seat would be noise.
+	if (connected && controller) bridge_.OnTimer();
 
 	// Push central codes into EuroScope. This has to happen here rather than on
 	// the worker thread: EuroScope is not thread safe.
