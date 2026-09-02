@@ -296,9 +296,6 @@ void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& u
 		std::lock_guard<std::mutex> lock(SSRCacheMutex_);
 		SSRCache_[callsign] = info;
 	}
-
-	QueueMessage("Squawk " + info.ssr + " assigned to " + callsign +
-				 (info.dupe ? " (DUPE)" : ""));
 }
 
 void CentralSquawk::ApplyAssignments()
