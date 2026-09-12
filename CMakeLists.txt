@@ -25,7 +25,7 @@ if(VCPKG_TARGET_TRIPLET MATCHES "-md$")
         "their own and need no overrides.")
 endif()
 
-project(CentralSquawk VERSION "1.0.1")
+project(CentralSquawk VERSION "1.0.2")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,12 +56,6 @@ IF (MSVC)
         ENDIF()
     ENDFOREACH()
 ENDIF ()
-
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    add_compile_definitions(DIR_SEPARATOR="\\\\")
-else()
-    add_compile_definitions(DIR_SEPARATOR="/")
-endif()
 
 if(DEV)
     message(STATUS "Development mode enabled")
