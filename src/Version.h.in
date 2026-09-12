@@ -2,13 +2,13 @@
 // clang-format off
 // prevents C2018 during compilation
 namespace {
-const char *PLUGIN_NAME{ "RampAgent" };
+const char *PLUGIN_NAME{ "CentralSquawk" };
 #if DEV
 const char *PLUGIN_VERSION{ "@CMAKE_PROJECT_VERSION@-dev"};
 #else
 const char *PLUGIN_VERSION{ "@CMAKE_PROJECT_VERSION@" };
 #endif
-const char *PLUGIN_AUTHOR{ "RampAgent Team+vACC-FR" };
+const char *PLUGIN_AUTHOR{ "CentralSquawk Team+vACC-FR" };
 const char *PLUGIN_LICENSE{ "GPLv3" };
 
 static constexpr std::uint8_t PLUGIN_VERSION_MAJOR = @CMAKE_PROJECT_VERSION_MAJOR@;
