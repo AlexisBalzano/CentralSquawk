@@ -95,13 +95,13 @@ void CentralSquawk::DisplayError(const std::string& message)
 void CentralSquawk::QueueError(const std::string& message)
 {
 	std::lock_guard<std::mutex> lock(messageQueueMutex_);
-	messageQueue_.push_back({message, true});
+	messageQueue_.emplace_back<std::pair<std::string, bool>>({message, true});
 }
 
 void CentralSquawk::QueueMessage(const std::string& message)
 {
 	std::lock_guard<std::mutex> lock(messageQueueMutex_);
-	messageQueue_.push_back({message, false});
+	messageQueue_.emplace_back<std::pair<std::string, bool>>({message, false});
 }
 
 void CentralSquawk::WorkerThread() {
@@ -390,7 +390,7 @@ void CentralSquawk::OnTimer(int Counter) {
 
 bool CentralSquawk::IsConnected()
 {
-	bool userIsConnected = this->GetConnectionType() == EuroScopePlugIn::CONNECTION_TYPE_DIRECT;
+	bool userIsConnected = this->GetConnectionType() == EuroScopePlugIn::CONNECTION_TYPE_DIRECT || this->GetConnectionType() == EuroScopePlugIn::CONNECTION_TYPE_VIA_PROXY;
 	return userIsConnected;
 }
 
