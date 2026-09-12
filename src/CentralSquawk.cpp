@@ -153,7 +153,7 @@ void CentralSquawk::WorkerThread() {
 void CentralSquawk::FetchAssignedSSR(httplib::Client& cli)
 {
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Get("/squawk/api/squawks", headers);
+	auto res = cli.Get("/api/squawks", headers);
 
 	if (!res) {
 		if (printError) {
@@ -247,7 +247,7 @@ void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& u
 	}
 
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Post("/squawk/api/assign", headers, body.dump(), "application/json");
+	auto res = cli.Post("/api/assign", headers, body.dump(), "application/json");
 
 	if (!res) {
 		QueueError("Assignment request for " + callsign + " failed: " + httplib::to_string(res.error()));
