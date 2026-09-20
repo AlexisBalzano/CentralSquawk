@@ -48,7 +48,70 @@ inline bool CentralSquawk::OnCompileCommand(const char* sCommandLine)
 		return true;
 	}
 
-	DisplayMessage("Commands: .centralsquawk version");
+	if (sub == "status")
+	{
+		// Which world the plugin thinks it is in, which server that points at,
+		// and WHY it thinks so. Worth spelling out: a simulator session that
+		// silently talks to the live server looks exactly like one that works,
+		// and the reason is the part a controller can act on.
+		const NetworkMode mode = ResolveMode();
+		const auto name = [](NetworkMode m) {
+			return m == NetworkMode::Sweatbox ? "simulator"
+				 : m == NetworkMode::Live     ? "live"
+											  : "offline";
+		};
+
+		DisplayMessage(std::string("Mode: ") + name(mode) +
+					   (mode == NetworkMode::Offline ? "" : "   server: " + EndpointFor(mode)));
+
+		const ModeOverride override = modeOverride_.load(std::memory_order_acquire);
+		if (override != ModeOverride::Auto) {
+			DisplayMessage(std::string("Reason: forced with .centralsquawk mode ") +
+						   (override == ModeOverride::ForceSim ? "sim" : "live"));
+		}
+		else if (connectionMode_.load(std::memory_order_acquire) == NetworkMode::Sweatbox) {
+			DisplayMessage("Reason: EuroScope reports a simulator connection.");
+		}
+		else if (inferredSim_.load(std::memory_order_acquire)) {
+			DisplayMessage("Reason: the live server does not show this callsign logged on, "
+						   "so this is a training connection.");
+		}
+		else if (mode == NetworkMode::Live) {
+			DisplayMessage("Reason: the live server shows this callsign logged on to VATSIM.");
+		}
+
+		if (mode == NetworkMode::Sweatbox)
+		{
+			DisplayMessage(std::string("Simulator feed: ") +
+						   (feeding_.load(std::memory_order_acquire) ? "this client is feeding the session picture"
+									 : "another client is feeding, or no push has succeeded yet"));
+		}
+		return true;
+	}
+
+	if (sub == "mode")
+	{
+		std::string value;
+		iss >> value;
+		value = toLower(value);
+
+		// An escape hatch, not a safety mechanism. The live server refuses a
+		// callsign it cannot see whichever way this is set, so the worst a
+		// wrong setting can do is cost codes.
+		if (value == "auto")      modeOverride_.store(ModeOverride::Auto, std::memory_order_release);
+		else if (value == "live") modeOverride_.store(ModeOverride::ForceLive, std::memory_order_release);
+		else if (value == "sim" || value == "sweatbox")
+								  modeOverride_.store(ModeOverride::ForceSim, std::memory_order_release);
+		else {
+			DisplayMessage("Usage: .centralsquawk mode auto|live|sim");
+			return true;
+		}
+
+		DisplayMessage("Mode set to " + value + ". Run .centralsquawk status to see what took effect.");
+		return true;
+	}
+
+	DisplayMessage("Commands: .centralsquawk version | status | mode auto|live|sim");
 	return true;
 }
 

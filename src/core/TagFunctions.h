@@ -24,7 +24,7 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 {
 	std::ignore = pt;
 
-	if (!isConnected_.load(std::memory_order_acquire)) return;
+	if (!IsOnline()) return;
 	if (!isController_.load(std::memory_order_acquire)) {
 		QueueError("Only controllers may request a squawk assignment.");
 		return;
@@ -37,10 +37,46 @@ inline void CentralSquawk::OnFunctionCall(int functionId, const char* itemString
 	if (callsignPtr == nullptr || *callsignPtr == '\0') return;
 	const std::string callsign = ToUpper(callsignPtr);
 
+	// The datafeed-shaped view of this flight, read here because this is the
+	// main thread and the worker that sends the request cannot touch EuroScope.
+	const auto captureSeed = [&]() -> FlightObservation {
+		FlightObservation seed;
+		seed.callsign = callsign;
+
+		auto data = fp.GetFlightPlanData();
+		if (!data.IsReceived()) return seed;  // nothing filed yet: send without one
+
+		// The FP track position rather than the correlated radar target. A pilot
+		// who has just connected may not be correlated yet, which is precisely
+		// the case this exists for; EuroScope falls back to its own computed
+		// position when there is no radar return, and uses the last real one
+		// when there is.
+		const auto track = fp.GetFPTrackPosition();
+		if (!track.IsValid()) return seed;  // unplaceable, so unusable as a seed
+
+		const auto position = track.GetPosition();
+		seed.latitude = position.m_Latitude;
+		seed.longitude = position.m_Longitude;
+		seed.altitude = track.GetPressureAltitude();
+		seed.groundspeed = track.GetReportedGS();
+
+		seed.flightRules = ToUpper(SafeString(data.GetPlanType()));
+		seed.departure = ToUpper(SafeString(data.GetOrigin()));
+		seed.arrival = ToUpper(SafeString(data.GetDestination()));
+		// Unextracted field 10, the same string the datafeed carries as
+		// `flight_plan.aircraft`, which is what the Mode S test parses.
+		seed.equipment = ToUpper(SafeString(data.GetAircraftInfo()));
+		seed.route = ToUpper(SafeString(data.GetRoute()));
+
+		seed.valid = true;
+		return seed;
+	};
+
 	// Hand a request to the worker thread.
 	const auto queueRequest = [&](AssignRequest::Kind kind, const std::string& code = {}) {
+		FlightObservation seed = captureSeed();
 		std::lock_guard<std::mutex> lock(apiRequestQueueMutex_);
-		pendingAssignRequests_[callsign] = AssignRequest{ kind, code };
+		pendingAssignRequests_[callsign] = AssignRequest{ kind, code, std::move(seed) };
 	};
 
 	switch (static_cast<TagActionID>(functionId)) {
