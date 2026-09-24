@@ -1,25 +1,3 @@
-Central squawk assignment with correct mode S 1000 assigns, inform on DUPE and allow manual assignation from users
-API knows all -> implique d'avoir des navdata sur le serveur -> donc update tous les mois -> creer un autoupdater local avec base de donnée navigraph (generer les data, les envoyer sur une repo puis webhook sur le server)
-permet de ne faire aucun calcul sur le client
-permet d'assigner des squawk partout sans controleur
-moins de data a envoyer
-
-doit connetre les différentes FIR pour assigner les bonnes plages de SSR par FIR
-map Callsign -> SSR mais avec possibilité de chercher le SSR aussi pour facilité la detection de DUPE
-
-Comment gerer si assignation manuelle d'un SSR déjà assigné: Effectuer une nouvelle assignation auto sur le trafic perdant son SSR
-Comment gerer si assignation manuelle d'un SSR déjç renseigné par un autre trafic: Affichage DUPE sans nouvelle assignation auto 
-																								(nécessite le controleur de forcer une assign auto)
-
-Comment gerer la fin d'assignation: Boucle qui cycle sur tous les callsigns à X interval et vérifie qu'ils soient encore
-				dans une zone d'exclusion (plus grande que la france paddée)
-				sinon, les supprimer de la map -> les SSR redeviennent disponibles
-
-
-Infos renvoyées vers le client:
-	json object keyed by callsign with SSR property and dupe boolean
-
-
 # Design
 
 ## Roles
