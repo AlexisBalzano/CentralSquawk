@@ -186,12 +186,13 @@ void CentralSquawk::WorkerThread() {
 			userCallsign = userCallsign_;
 		}
 
-		// Which world is this? Asked only when EuroScope's own answer was
-		// inconclusive -- it said an ordinary connection, which is what both a
-		// real controller and a student on a training server look like.
+		// Which world is this? Asked only when the server detector could not
+		// find the FSD socket and fell back to EuroScope's ordinary-connection
+		// answer, which a student on a training server also gets.
 		if (!userCallsign.empty()
 			&& modeOverride_.load(std::memory_order_acquire) == ModeOverride::Auto
 			&& connectionMode_.load(std::memory_order_acquire) == NetworkMode::Live
+			&& !connectionConclusive_.load(std::memory_order_acquire)
 			&& counter % (NETWORK_PROBE_INTERVAL * 10) == 0)
 		{
 			switch (ProbeNetwork(liveCli, userCallsign)) {
@@ -677,25 +678,36 @@ void CentralSquawk::OnTimer(int Counter) {
 
 NetworkMode CentralSquawk::DetectConnectionMode()
 {
-	// Only half the answer, and the weaker half. EuroScope reports SWEATBOX for
-	// the machine actually running the simulator session, but a student who
-	// connects normally and simply picks a training server as their server is
-	// reported as DIRECT, indistinguishable from the real network. A Sweatbox
-	// answer here is therefore conclusive; a Live answer is only a starting
-	// point, which ResolveMode then tests against the live server.
-	switch (auto it = this->GetConnectionType()) {
-	case EuroScopePlugIn::CONNECTION_TYPE_DIRECT:
-	case EuroScopePlugIn::CONNECTION_TYPE_VIA_PROXY:
-		return NetworkMode::Live;
-
-	case EuroScopePlugIn::CONNECTION_TYPE_SWEATBOX:
-	case EuroScopePlugIn::CONNECTION_TYPE_SIMULATOR_SERVER:
-	case EuroScopePlugIn::CONNECTION_TYPE_SIMULATOR_CLIENT:
-		return NetworkMode::Sweatbox;
+	// EuroScope's own connection type cannot answer this: a student who ticks
+	// "Connect to VATSIM" and picks SweatBox is reported as DIRECT, exactly like
+	// the real network. The detector finds the FSD socket instead and matches it
+	// to the server picked in the connect dialog (AUTOMATIC = VATSIM).
+	const int type = this->GetConnectionType();
+	serverDetector_.Update(type);
+	const essd::ServerInfo& info = serverDetector_.GetInfo();
 
 	// Playback is a recording: there is nobody to assign a code to, and writing
 	// one would only corrupt the replay.
-	case EuroScopePlugIn::CONNECTION_TYPE_PLAYBACK:
+	if (type == EuroScopePlugIn::CONNECTION_TYPE_PLAYBACK) {
+		connectionConclusive_.store(true, std::memory_order_release);
+		return NetworkMode::Offline;
+	}
+
+	connectionConclusive_.store(!info.fromFallback, std::memory_order_release);
+
+	switch (info.network) {
+	case essd::Network::Vatsim:
+		// Without a socket this is just DIRECT restated, hence not conclusive.
+		return NetworkMode::Live;
+
+	case essd::Network::Sweatbox:
+	case essd::Network::Simulator:
+		return NetworkMode::Sweatbox;
+
+	// Pending lasts a few hundred milliseconds after connecting. Doing nothing
+	// until it settles beats talking to the wrong server in the meantime.
+	case essd::Network::Pending:
+	case essd::Network::Offline:
 	default:
 		return NetworkMode::Offline;
 	}
@@ -713,13 +725,15 @@ NetworkMode CentralSquawk::ResolveMode() const
 	case ModeOverride::Auto:      break;
 	}
 
-	// EuroScope says simulator only when it is certain, so take it at its word.
-	if (connectionMode_.load(std::memory_order_acquire) == NetworkMode::Sweatbox) {
-		return NetworkMode::Sweatbox;
+	// A simulator answer is always conclusive, and so is a Live one backed by
+	// the actual FSD socket.
+	const NetworkMode detected = connectionMode_.load(std::memory_order_acquire);
+	if (detected == NetworkMode::Sweatbox || connectionConclusive_.load(std::memory_order_acquire)) {
+		return detected;
 	}
 
-	// Otherwise the connection looks ordinary, which a student on a training
-	// server also looks like. The live server settles it.
+	// The detector fell back to EuroScope's DIRECT, which a student on a
+	// training server also looks like. The live server settles it.
 	return inferredSim_.load(std::memory_order_acquire) ? NetworkMode::Sweatbox : NetworkMode::Live;
 }
 

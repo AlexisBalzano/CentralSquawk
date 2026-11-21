@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/BridgePublisher.h"
+#include "esserverdetect.h"
 
 // Only referenced through a reference in declarations below, so the full
 // httplib header (which is large, and needs its OpenSSL defines set first) is
@@ -166,7 +167,7 @@ namespace centralSquawk {
 
 	private:
 		bool IsController();
-		/// Read EuroScope's connection type. MUST run on the main thread.
+		/// Ask the server detector which network this is. MUST run on the main thread.
 		NetworkMode DetectConnectionMode();
 		/// Combine connection type, override and the live server's verdict.
 		/// Cheap and lock free, so either thread may call it.
@@ -223,8 +224,15 @@ namespace centralSquawk {
 		// User state
 		std::mutex userCallsignMutex_;
 		std::atomic<bool> isController_ = false;
-		/// What EuroScope reports. Conclusive only when it says Sweatbox.
+		/// Which FSD server EuroScope is really connected to, read from the OS
+		/// socket table and matched against ipaddr.txt. Main thread only.
+		essd::ServerDetector serverDetector_;
+		/// What the server detector reports, as a mode.
 		std::atomic<NetworkMode> connectionMode_{ NetworkMode::Offline };
+		/// False when the detector could not find the FSD socket and fell back to
+		/// EuroScope's connection type. A Live answer is then only a starting
+		/// point, and the live server's probe has to settle it.
+		std::atomic<bool> connectionConclusive_{ false };
 		/// Set by the worker once the live server has denied knowing this
 		/// callsign for long enough to believe it. The confirmation timer lives
 		/// in the worker thread, so only the settled answer is published here.

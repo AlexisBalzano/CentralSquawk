@@ -25,7 +25,7 @@ if(VCPKG_TARGET_TRIPLET MATCHES "-md$")
         "their own and need no overrides.")
 endif()
 
-project(CentralSquawk VERSION "1.0.3")
+project(CentralSquawk VERSION "1.0.4")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -88,6 +88,7 @@ include_directories(
 set(SOURCES
     src/CentralSquawk.cpp
     src/core/BridgePublisher.cpp
+    src/core/ServerDetect.cpp
 )
 
 # Headers carry the inline member definitions, so list them on the target: that is
@@ -100,6 +101,7 @@ set(HEADERS
     src/core/DevEndpoint.h
     src/core/Helpers.h
     src/core/TagFunctions.h
+    External/esserverdetect/esserverdetect.h
 )
 
 # Define the plugin library (create target before using target_*
@@ -140,6 +142,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Third-party and warned about at /W4 like our own code would be, so keep it SYSTEM.
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/External/esbridge
+    ${CMAKE_SOURCE_DIR}/External/esserverdetect
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
@@ -151,7 +154,7 @@ TARGET_LINK_LIBRARIES(${PROJECT_NAME} PRIVATE
     EuroScopePluginDLL
     OpenSSL::SSL OpenSSL::Crypto
     nlohmann_json::nlohmann_json
-    crypt32.lib ws2_32.lib Shlwapi.lib
+    crypt32.lib ws2_32.lib Shlwapi.lib iphlpapi.lib
 )
 
 # Output dirs and properties

@@ -69,6 +69,12 @@ inline bool CentralSquawk::OnCompileCommand(const char* sCommandLine)
 			DisplayMessage(std::string("Reason: forced with .centralsquawk mode ") +
 						   (override == ModeOverride::ForceSim ? "sim" : "live"));
 		}
+		else if (const essd::ServerInfo& info = serverDetector_.GetInfo();
+				 mode != NetworkMode::Offline && !info.fromFallback && info.network != essd::Network::Simulator) {
+			DisplayMessage(std::string("Reason: connected to server '") +
+						   (info.serverName.empty() ? info.remoteIp : info.serverName) + "' (" + info.remoteIp + ")" +
+						   (info.network == essd::Network::Vatsim ? ", which is VATSIM." : ", which is not VATSIM."));
+		}
 		else if (connectionMode_.load(std::memory_order_acquire) == NetworkMode::Sweatbox) {
 			DisplayMessage("Reason: EuroScope reports a simulator connection.");
 		}
