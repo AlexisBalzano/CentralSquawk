@@ -16,6 +16,7 @@
 #include "core/CompileCommands.h"
 #include "core/TagFunctions.h"
 #include "Secret.h"
+#include "NeoChatClient.h"
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
@@ -25,6 +26,16 @@ using namespace EuroScopePlugIn;
 std::unique_ptr<centralSquawk::CentralSquawk> myPluginInstance = nullptr;
 
 namespace {
+	/// Our dot-commands, for NeoChat's autocomplete. Keep in step with
+	/// OnCompileCommand in core/CompileCommands.h.
+	const std::vector<const char*> kNeoChatCommands = {
+		".centralsquawk version",
+		".centralsquawk status",
+		".centralsquawk mode auto",
+		".centralsquawk mode live",
+		".centralsquawk mode sim",
+	};
+
 	/// Turn the API's machine-readable rejection into something a controller can
 	/// act on. Anything unrecognised passes through unchanged: a rejection this
 	/// build has not heard of should still be visible, just less politely.
@@ -100,6 +111,8 @@ void CentralSquawk::Shutdown()
 	// Wait for worker thread to finish
 	if (m_thread.joinable())
 		m_thread.join();
+
+	NeoChat::UnregisterCommands(kNeoChatCommands);
 
 	DisplayMessage("Central Squawk shutdown complete");
 }
@@ -631,7 +644,9 @@ void CentralSquawk::ServePictureRequest()
 }
 
 void CentralSquawk::OnTimer(int Counter) {
-	std::ignore = Counter;
+	// Idempotent, and repeated so the commands survive NeoChat loading after
+	// us or being reloaded. A no-op when NeoChat is not loaded.
+	if (Counter % 5 == 0) NeoChat::RegisterCommands(kNeoChatCommands);
 
 	// Update user state. Only the connection type is read here; the rest of the
 	// mode is resolved from it, the override, and the live server's verdict.

@@ -102,6 +102,8 @@ set(HEADERS
     src/core/Helpers.h
     src/core/TagFunctions.h
     External/esserverdetect/esserverdetect.h
+    External/neochat/NeoChatApi.h
+    External/neochat/NeoChatClient.h
 )
 
 # Define the plugin library (create target before using target_*
@@ -143,6 +145,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/External/esbridge
     ${CMAKE_SOURCE_DIR}/External/esserverdetect
+    ${CMAKE_SOURCE_DIR}/External/neochat
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 
