@@ -1,25 +1,3 @@
-Central squawk assignment with correct mode S 1000 assigns, inform on DUPE and allow manual assignation from users
-API knows all -> implique d'avoir des navdata sur le serveur -> donc update tous les mois -> creer un autoupdater local avec base de donnée navigraph (generer les data, les envoyer sur une repo puis webhook sur le server)
-permet de ne faire aucun calcul sur le client
-permet d'assigner des squawk partout sans controleur
-moins de data a envoyer
-
-doit connetre les différentes FIR pour assigner les bonnes plages de SSR par FIR
-map Callsign -> SSR mais avec possibilité de chercher le SSR aussi pour facilité la detection de DUPE
-
-Comment gerer si assignation manuelle d'un SSR déjà assigné: Effectuer une nouvelle assignation auto sur le trafic perdant son SSR
-Comment gerer si assignation manuelle d'un SSR déjç renseigné par un autre trafic: Affichage DUPE sans nouvelle assignation auto 
-																								(nécessite le controleur de forcer une assign auto)
-
-Comment gerer la fin d'assignation: Boucle qui cycle sur tous les callsigns à X interval et vérifie qu'ils soient encore
-				dans une zone d'exclusion (plus grande que la france paddée)
-				sinon, les supprimer de la map -> les SSR redeviennent disponibles
-
-
-Infos renvoyées vers le client:
-	json object keyed by callsign with SSR property and dupe boolean
-
-
 # Design
 
 ## Roles
@@ -316,7 +294,6 @@ Pushing to `main` in the config repository fires a webhook and the server re-ing
 
 ## Accepted risks
 
-- **Shared-secret authentication.** The secret is compiled into the distributed DLL, so any user can extract it and forge a token for any controller callsign, then set or force codes anywhere in France.
 - **A training callsign that collides with a live one defeats the network gate.** The gate asks whether the callsign is logged on, not whether *this person* is. A student running a sweatbox as `LFPG_TWR` while a real `LFPG_TWR` is online on VATSIM is indistinguishable from that controller, and their requests would be accepted by the live server. Closing it properly needs the CID, which EuroScope does not expose for the connected controller. Narrow - it needs the collision to be live at that moment - and a training department avoids it entirely by using callsigns that are not in use.
 - **A simulator feeder is trusted completely.** Inside a simulator session the pushed picture is the only description of that world, so a forged token can invent traffic, hold codes and raise DUPEs freely. That is tolerable only because the simulator server is a separate instance with a separate pool, and stops being tolerable the moment anyone runs a sim session against the live instance.
 - **The network gate depends on the datafeed.** If the feed cannot be fetched, the roster from the last successful poll keeps being used - controllers do not churn fast enough for that to matter over minutes, and dropping it would refuse every controller in the country. A controller who logs on *during* an outage is refused until it recovers.
