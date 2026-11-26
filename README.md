@@ -172,28 +172,6 @@ Four rules keep this from being a hole in the authority model:
 
 A sweatbox has no VATSIM datafeed behind it, so nothing describes that world to the server and the plugin would otherwise sit silent for a whole training session. The session therefore describes itself: the server runs a **second instance** with `FEED_SOURCE=push`, holding its own pool, and one client pushes the picture to it. Nothing a simulator session does can reach a real aircraft, because the two never share a pool.
 
-### EuroScope cannot tell you which world you are in
-
-The connection type looks like the answer and is not. EuroScope reports `SWEATBOX` only for the machine actually **running** the session - typically the instructor's. A student joins by connecting normally and picking the training server as their server, and EuroScope reports that as `DIRECT`, identically to VATSIM.
-
-So the participants who do the assigning are exactly the ones the connection type gets wrong. A plugin that trusted it would let a student's requests reach the live server and - with seeding - **invent sweatbox aircraft in the live map and hold real codes for them**. Asking the student to type a command instead only moves the failure: forget it once and the same thing happens, silently.
-
-### The live server proves the negative instead
-
-The datafeed lists every controller logged on to VATSIM, and the server already fetches it every 15 s. A callsign absent from that list is not on this network, whatever its plugin believes.
-
-**The live server refuses `/api/assign` from any callsign it cannot see logged on.** That is the isolation boundary, and the only one that holds, because it does not depend on the client being right about anything. A student who sets nothing up gets a refusal and a message rather than a corrupted pool. The cost is that a genuine controller is refused for the ~20 s until their logon reaches the feed, which is cheap and self-correcting.
-
-The same fact is published at `GET /api/network?controller=…` so the plugin can ask **before** a controller needs a code rather than after being turned away. The mode then resolves from three signals, in order of authority:
-
-| | Signal | Conclusive? |
-| --- | --- | --- |
-| 1 | `.centralsquawk mode live\|sim\|auto` | Yes, when set. An escape hatch, not a safety mechanism - the server refuses regardless |
-| 2 | EuroScope's connection type | Only when it says simulator. `PLAYBACK` counts as offline: a recording has nobody to assign to |
-| 3 | The live server's answer for this callsign | Decides every ordinary-looking connection, which is most of them |
-
-A negative answer must hold for 60 s before the plugin acts on it, because a controller who has just logged on really is absent from the feed for a generation or two. A server that cannot be reached changes nothing: not knowing is not evidence.
-
 ### Feeding the session
 
 Every EuroScope in a sweatbox sees the same traffic, so without arbitration they would all push and the map would be rebuilt several times a tick from pictures that disagree. The first client to push claims a lease and renews it on every push; the rest are told who holds it and drop back to probing occasionally. A lease is taken over once it goes stale, so an instructor whose EuroScope crashes costs the session a few seconds rather than the picture. A client probing for the lease still sends the whole picture, because winning it with an empty push would start the grace clock on every flight in the session.
@@ -259,8 +237,6 @@ GET /api/network?controller=LFFF_CTR
 
 Answered with `409 not_the_feeder` when another client holds the lease.
 
-**Authentication**: `SHA256(shared_secret + controller_callsign)`.
-
 ## Configuration and navdata
 
 All configuration is ingested rather than baked into the server: FIR polygons, per-FIR ORCAM pools and exclusion lists, the zone geometry, and the three navdata files behind the Mode S decision. It lives in the **CentralSquawk-config** repository.
@@ -291,15 +267,3 @@ Pushing to `main` in the config repository fires a webhook and the server re-ing
 | `ZONE_PADDING` | 100 NM | Release boundary beyond the French FIRs |
 | Default codes | `0000`, `1200`, `1234`, `2000`, `7000`, `1000` | Configurable |
 | Navdata refresh | Every AIRAC, 28 days | Config repo push then webhook |
-
-## Accepted risks
-
-- **A training callsign that collides with a live one defeats the network gate.** The gate asks whether the callsign is logged on, not whether *this person* is. A student running a sweatbox as `LFPG_TWR` while a real `LFPG_TWR` is online on VATSIM is indistinguishable from that controller, and their requests would be accepted by the live server. Closing it properly needs the CID, which EuroScope does not expose for the connected controller. Narrow - it needs the collision to be live at that moment - and a training department avoids it entirely by using callsigns that are not in use.
-- **A simulator feeder is trusted completely.** Inside a simulator session the pushed picture is the only description of that world, so a forged token can invent traffic, hold codes and raise DUPEs freely. That is tolerable only because the simulator server is a separate instance with a separate pool, and stops being tolerable the moment anyone runs a sim session against the live instance.
-- **The network gate depends on the datafeed.** If the feed cannot be fetched, the roster from the last successful poll keeps being used - controllers do not churn fast enough for that to matter over minutes, and dropping it would refuse every controller in the country. A controller who logs on *during* an outage is refused until it recovers.
-- **Seeded flights need not exist.** A forged token can conjure a flight the datafeed has never carried and have a code issued to it. The damage is bounded rather than prevented: no code is reserved on the client's word, the position must fall inside the padded zone, each controller callsign may hold only a few unconfirmed seeds at a time, and every one of them is released within the seed TTL. The cost of an abused seed is therefore a handful of codes held for two minutes, and a logbook line naming the callsign that did it.
-- **Callsign as the only key.** Two pilots connected on the same callsign share one entry, and a pilot who reconnects under a corrected callsign orphans their previous code until the grace period expires.
-- **Navdata licensing.** `fix.txt`, `airway.txt` and `procedure.txt` are Navigraph-derived. The source database is gitignored, but redistributing data derived from it through a public repository still needs a licence check.
-- **Identifier collisions.** Around 915 identifiers are reused among in-area fixes, and roughly a hundred more collide between in-area and out-of-area points. Resolving route points by name will occasionally judge a point to be inside the area because a same-named fix elsewhere is. Inherent to name-based resolution, and small, but it biases toward granting 1000.
-- **Split manual behaviour.** A code set through the plugin is protected while the same code set directly in EuroScope is overridden - identical controller intent, opposite outcome depending on the interface used.
-- **Fixed entry ring.** A fixed distance approximates a time, so 40 NM is about 5 min for a jet at 450 kt but roughly 20 min for a light aircraft at 120 kt, which holds a code far longer than intended before the flight is anywhere near French airspace.
