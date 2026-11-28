@@ -26,6 +26,14 @@ using namespace EuroScopePlugIn;
 std::unique_ptr<centralSquawk::CentralSquawk> myPluginInstance = nullptr;
 
 namespace {
+	/// Serialise a request body. Strings are converted to UTF-8 on the way in
+	/// (SafeString), but an invalid byte must never get as far as throwing on
+	/// the worker thread, so anything left over is replaced instead.
+	std::string DumpJson(const nlohmann::json& body)
+	{
+		return body.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+	}
+
 	/// Our dot-commands, for NeoChat's autocomplete. Keep in step with
 	/// OnCompileCommand in core/CompileCommands.h.
 	const std::vector<const char*> kNeoChatCommands = {
@@ -178,7 +186,14 @@ void CentralSquawk::WorkerThread() {
 	/// rather than in a member so the confirmation window is single threaded.
 	std::chrono::steady_clock::time_point offNetworkSince{};
 	bool offNetwork = false;
+	/// Last failure the safety net reported, so a repeating one is said once.
+	std::string lastWorkerError;
 
+	// The outer loop is a safety net. An exception escaping a std::thread calls
+	// std::terminate, which takes EuroScope down with it; one bad iteration must
+	// only cost that iteration.
+	while (m_stop.load(std::memory_order_acquire) == false) {
+	try {
 	while (m_stop.load(std::memory_order_acquire) == false) {
 		const NetworkMode mode = ResolveMode();
 		if (mode == NetworkMode::Offline) {
@@ -294,6 +309,24 @@ void CentralSquawk::WorkerThread() {
 
 		++counter;
 		std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Avoid busy waiting
+	}
+	}
+	catch (const std::exception& e) {
+		if (lastWorkerError != e.what()) {
+			lastWorkerError = e.what();
+			QueueError(std::string("Internal error, recovered: ") + e.what());
+		}
+	}
+	catch (...) {
+		if (lastWorkerError != "unknown") {
+			lastWorkerError = "unknown";
+			QueueError("Internal error, recovered.");
+		}
+	}
+	if (m_stop.load(std::memory_order_acquire)) break;
+	// Whatever threw is skipped this round rather than retried in a tight loop.
+	counter += 10;
+	std::this_thread::sleep_for(std::chrono::seconds(1));
 	}
 }
 
@@ -412,7 +445,7 @@ void CentralSquawk::SendAssignRequest(httplib::Client& cli, const std::string& u
 	}
 
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Post("/api/assign", headers, body.dump(), "application/json");
+	auto res = cli.Post("/api/assign", headers, DumpJson(body), "application/json");
 
 	if (!res) {
 		QueueError("Assignment request for " + callsign + " failed: " + httplib::to_string(res.error()));
@@ -503,7 +536,7 @@ CentralSquawk::FeedOutcome CentralSquawk::PushSimFeed(httplib::Client& cli, cons
 	};
 
 	httplib::Headers headers = { {"User-Agent", "CentralSquawk"} };
-	auto res = cli.Post("/api/feed", headers, body.dump(), "application/json");
+	auto res = cli.Post("/api/feed", headers, DumpJson(body), "application/json");
 
 	if (!res) {
 		announce(false, "Lost contact with the simulator squawk server: " + httplib::to_string(res.error()), true);
